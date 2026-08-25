@@ -42,7 +42,7 @@ class Player:
         print("Inventory:", self.inventory)
 
     def attack(self):
-        return random.randint(self.base_damage - 5, self.base_damage + 5)
+        return rng.randint(self.base_damage - 5, self.base_damage + 5)
 
     def use_potion(self):
         if self.inventory.get("Potion", 0) > 0:
@@ -87,15 +87,68 @@ class Enemy:
         self.damage = damage
 
     def attack(self):
-        return random.randint(5, self.damage)
+        return rng.randint(5, self.damage)
 
 # Game Functions
-def encounter_enemy(players):
-    enemy_name = random.choice(ENEMY_TYPES)
-    enemy_health = random.randint(50, 100)
-    enemy_damage = random.randint(15, 25)
-    enemy = Enemy(enemy_name, enemy_health, enemy_damage)
+def _print_combat_menu():
+    print("Choose your action:")
+    print("1. Attack")
+    print("2. Use Potion")
+    print("3. Use Special Ability")
+    print("4. Pass")
 
+
+def _use_special_ability(player, enemy):
+    """Apply the player's special ability.
+
+    Returns True when the ability also skips the enemy attack.
+    """
+    if isinstance(player, Warrior):
+        player.special_ability()
+        return True
+    damage = player.special_ability()
+    enemy.health -= damage
+    if isinstance(player, Rogue):
+        print(f"\nCritical Strike! {player.name} dealt {damage} damage.")
+    return False
+
+
+def _take_player_turn(player, enemy):
+    """Handle one player combat action.
+
+    Returns True when the enemy attack is skipped this round.
+    """
+    _print_combat_menu()
+    action = input("> ").strip()
+    if action == "1":
+        damage = player.attack()
+        enemy.health -= damage
+        print(f"\n{player.name} dealt {damage} damage to the {enemy.name}. Its health is now {enemy.health}.")
+    elif action == "2":
+        player.use_potion()
+    elif action == "3":
+        return _use_special_ability(player, enemy)
+    elif action == "4":
+        print(f"\n{player.name} passed their turn.")
+    return False
+
+
+def _enemy_strike(enemy, player):
+    player.health -= enemy.attack()
+    print(f"The {enemy.name} attacked {player.name}! Their health is now {player.health}.")
+    if player.health <= 0:
+        print(f"\n{player.name} has been defeated!")
+
+
+def _grant_loot(player, enemy):
+    print(f"\nYou defeated the {enemy.name}!")
+    loot = rng.choice(LOOT_ITEMS)
+    player.inventory[loot] = player.inventory.get(loot, 0) + 1
+    print(f"\nYou found {loot} in the loot!")
+
+
+def encounter_enemy(players):
+    enemy = Enemy(rng.choice(ENEMY_TYPES), rng.randint(50, 100), rng.randint(15, 25))
     print(f"\nA wild {enemy.name} appeared! It has {enemy.health} HP.")
 
     while enemy.health > 0 and any(player.health > 0 for player in players):
@@ -104,69 +157,19 @@ def encounter_enemy(players):
                 continue  # Skip players with 0 health
 
             print(f"\n{player.name}'s Turn:")
-            print("Choose your action:")
-            print("1. Attack")
-            print("2. Use Potion")
-            print("3. Use Special Ability")
-            print("4. Pass")
-
-            action = input("> ").strip()
-            if action == "1":
-                damage = player.attack()
-                enemy.health -= damage
-                print(f"\n{player.name} dealt {damage} damage to the {enemy.name}. Its health is now {enemy.health}.")
-            elif action == "2":
-                player.use_potion()
-            elif action == "3":
-                if isinstance(player, Mage):
-                    damage = player.special_ability()
-                    enemy.health -= damage
-                elif isinstance(player, Rogue):
-                    damage = player.special_ability()
-                    enemy.health -= damage
-                    print(f"\nCritical Strike! {player.name} dealt {damage} damage.")
-                elif isinstance(player, Warrior):
-                    player.special_ability()
-                    continue  # Skip enemy attack
-            elif action == "4":
-                print(f"\n{player.name} passed their turn.")
+            if _take_player_turn(player, enemy):
+                continue  # Special ability skipped the enemy attack
 
             if enemy.health <= 0:
-                print(f"\nYou defeated the {enemy.name}!")
-                loot = random.choice(LOOT_ITEMS)
-                player.inventory[loot] = player.inventory.get(loot, 0) + 1
-                print(f"\nYou found {loot} in the loot!")
+                _grant_loot(player, enemy)
                 return
 
-            # Enemy attacks after each player's turn
-            player.health -= enemy.attack()
-            print(f"The {enemy.name} attacked {player.name}! Their health is now {player.health}.")
-
-            if player.health <= 0:
-                print(f"\n{player.name} has been defeated!")
+            _enemy_strike(enemy, player)
 
     if all(player.health <= 0 for player in players):
         print("\nYour entire team has been defeated! Game over.")
         sys.exit()
 
-def explore(players):
-    print("\nYou are exploring the Mystic Lands...")
-    if random.random() < 0.6:  # 60% chance of encounter
-        encounter_enemy(players)
-    else:
-        event = random.choice(["treasure", "trap", "nothing"])
-        if event == "treasure":
-            player = random.choice(players)
-            loot = random.choice(LOOT_ITEMS)
-            player.inventory[loot] = player.inventory.get(loot, 0) + 1
-            print(f"\n{player.name} found a {loot}!")
-        elif event == "trap":
-            player = random.choice(players)
-            damage = random.randint(10, 20)
-            player.health -= damage
-            print(f"\n{player.name} triggered a trap and lost {damage} health!")
-        else:
-            print("\nYou found nothing this time.")
 
 def choose_class(name):
     print("\nChoose your class:")
